@@ -322,6 +322,8 @@ type request struct {
 	method        string
 	u             *url.URL
 	form          url.Values
+	data          []byte
+	contentType   string
 	verifier      string
 	sessionHandle string
 	callbackURL   string
@@ -499,7 +501,11 @@ func (c *Client) SetAuthorizationHeader(header http.Header, credentials *Credent
 func (c *Client) do(ctx context.Context, urlStr string, r *request) (*http.Response, error) {
 	var body io.Reader
 	if r.method != http.MethodGet {
-		body = strings.NewReader(r.form.Encode())
+		if r.data !=nil{
+			body = strings.NewReader(string(r.data))
+		}else{
+			body = strings.NewReader(r.form.Encode())
+		}
 	}
 	req, err := http.NewRequest(r.method, urlStr, body)
 	if err != nil {
@@ -521,6 +527,9 @@ func (c *Client) do(ctx context.Context, urlStr string, r *request) (*http.Respo
 		req.URL.RawQuery = r.form.Encode()
 	} else {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if r.contentType != ""{
+			req.Header.Set("Content-Type", r.contentType)
+		}
 	}
 	req = requestWithContext(ctx, req)
 	client := contextClient(ctx)
@@ -542,6 +551,12 @@ func (c *Client) GetContext(ctx context.Context, credentials *Credentials, urlSt
 func (c *Client) Post(client *http.Client, credentials *Credentials, urlStr string, form url.Values) (*http.Response, error) {
 	ctx := context.WithValue(context.Background(), HTTPClient, client)
 	return c.PostContext(ctx, credentials, urlStr, form)
+}
+
+// Post issues a POST with the specified form.
+func (c *Client) PostJson(client *http.Client, credentials *Credentials, urlStr string, data []byte) (*http.Response, error) {
+	ctx := context.WithValue(context.Background(), HTTPClient, client)
+	return c.do(ctx, urlStr, &request{method: http.MethodPost, credentials: credentials, data: data, contentType: "application/json"})
 }
 
 // PostContext uses Context to perform Post.
@@ -566,6 +581,10 @@ func (c *Client) Put(client *http.Client, credentials *Credentials, urlStr strin
 	return c.PutContext(ctx, credentials, urlStr, form)
 }
 
+func (c *Client) PutJson(client *http.Client, credentials *Credentials, urlStr string, data []byte) (*http.Response, error) {
+	ctx := context.WithValue(context.Background(), HTTPClient, client)
+	return c.do(ctx, urlStr, &request{method: http.MethodPut, credentials: credentials, data: data, contentType: "application/json"})
+}
 // PutContext uses Context to perform Put.
 func (c *Client) PutContext(ctx context.Context, credentials *Credentials, urlStr string, form url.Values) (*http.Response, error) {
 	return c.do(ctx, urlStr, &request{method: http.MethodPut, credentials: credentials, form: form})
